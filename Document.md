@@ -34,4 +34,13 @@ graph TD
 
 - Foreign keys enforce connections in the database. SQLAlchemy's relationship() lets Python navigate between related objects.
 
+## Day 3: Progress
+
+```mermaid
+flowchart TD
+    A[Client sends JWT <token>] --> B[Validate signature and expiration]
+    B --> C[Load user from PostgreSQL]
+```
+
+## Day 4: Progress
 
