@@ -8,6 +8,7 @@ from fastapi import (
     HTTPException,
     UploadFile,
     status,
+    Query,
 )
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -20,21 +21,36 @@ from app.services.document_service import (
     create_document, 
     update_document,
     delete_document,
+    list_documents as list_documents_service
     )
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
+
 
 
 @router.get("/", response_model=list[DocumentResponse])
 def list_documents(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
+    subject_id: Annotated[int | None, Query(gt=0)] = None,
+    search: Annotated[str | None, Query(min_length=1, max_length=100)] = None,
+    sort_by: Annotated[
+        str, Query(pattern="^(created_at|title|file_size)$")
+    ] = "created_at",
+    order: Annotated[str, Query(pattern="^(asc|desc)$")] = "desc",
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ):
-    statement = select(Document).where(
-        Document.owner_id == current_user.id
+    return list_documents_service(
+        db=db,
+        current_user=current_user,
+        subject_id=subject_id,
+        search=search,
+        sort_by=sort_by,
+        order=order,
+        limit=limit,
+        offset=offset,
     )
-    return db.scalars(statement).all()
-
 
 @router.get(
     "/{document_id}",

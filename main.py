@@ -5,6 +5,7 @@ from app.db.database import Base, engine
 from app.models import User, Subject, Document
 from app.routers.auth import router as auth_router
 from app.routers.documents import router as documents_router
+from app.routers.subjects import router as subjects_router
 
 
 def create_app(create_tables: bool = False) -> FastAPI:
@@ -15,6 +16,7 @@ def create_app(create_tables: bool = False) -> FastAPI:
 
     app.include_router(auth_router)
     app.include_router(documents_router)
+    app.include_router(subjects_router)
 
     @app.get("/health")
     def health_check():

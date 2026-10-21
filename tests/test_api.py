@@ -254,6 +254,37 @@ def create_test_document(client, headers, title="Study Notes"):
     assert response.status_code == 201
     return response.json()
 
+def create_test_subject(client, headers, name="Python"):
+    response = client.post(
+        "/subjects/",
+        params={"name": name},
+        headers=headers,
+    )
+    assert response.status_code == 201
+    return response.json()
+
+
+def create_test_document_for_subject(
+    client, headers, subject_id, title
+):
+    response = client.post(
+        "/documents/",
+        headers=headers,
+        data={
+            "title": title,
+            "subject_id": str(subject_id),
+        },
+        files={
+            "file": (
+                "notes.pdf",
+                b"%PDF-1.4\nTest PDF",
+                "application/pdf",
+            )
+        },
+    )
+    assert response.status_code == 201
+    return response.json()
+
 
 def test_update_document_title(client):
     headers = register_and_login(client)
@@ -352,4 +383,226 @@ def test_repeated_delete_returns_404(client):
     second_response = client.delete(url, headers=headers)
     assert second_response.status_code == 404
 
+def test_filter_documents_by_subject(client):
+    headers = register_and_login(client)
 
+    python_subject = create_test_subject(
+        client, headers, "Python"
+    )
+    sql_subject = create_test_subject(
+        client, headers, "SQL"
+    )
+
+    python_doc = create_test_document_for_subject(
+        client, headers, python_subject["id"], "Python Handbook"
+    )
+    create_test_document_for_subject(
+        client, headers, sql_subject["id"], "SQL Handbook"
+    )
+
+    response = client.get(
+        "/documents/",
+        headers=headers,
+        params={"subject_id": python_subject["id"]},
+    )
+
+    assert response.status_code == 200
+
+    documents = response.json()
+
+    assert len(documents) == 1
+    assert documents[0]["id"] == python_doc["id"]
+    assert documents[0]["title"] == "Python Handbook"
+
+def test_search_documents_by_title(client):
+    headers = register_and_login(client)
+
+    create_test_document(
+        client, headers, "Python Handbook"
+    )
+    create_test_document(
+        client, headers, "SQL Handbook"
+    )
+
+    response = client.get(
+        "/documents/",
+        headers=headers,
+        params={"search": "python"},
+    )
+
+    assert response.status_code == 200
+
+    documents = response.json()
+
+    assert len(documents) == 1
+    assert documents[0]["title"] == "Python Handbook"
+
+def test_sort_documents_by_title_ascending(client):
+    headers = register_and_login(client)
+
+    create_test_document(client, headers, "SQL Handbook")
+    create_test_document(client, headers, "Python Handbook")
+    create_test_document(client, headers, "AI Handbook")
+
+    response = client.get(
+        "/documents/",
+        headers=headers,
+        params={
+            "sort_by": "title",
+            "order": "asc",
+        },
+    )
+
+    assert response.status_code == 200
+
+    titles = [doc["title"] for doc in response.json()]
+
+    assert titles == [
+        "AI Handbook",
+        "Python Handbook",
+        "SQL Handbook",
+    ]
+
+def test_sort_documents_by_title_descending(client):
+    headers = register_and_login(client)
+
+    create_test_document(client, headers, "SQL Handbook")
+    create_test_document(client, headers, "Python Handbook")
+    create_test_document(client, headers, "AI Handbook")
+
+    response = client.get(
+        "/documents/",
+        headers=headers,
+        params={
+            "sort_by": "title",
+            "order": "desc",
+        },
+    )
+
+    assert response.status_code == 200
+
+    titles = [doc["title"] for doc in response.json()]
+
+    assert titles == [
+        "SQL Handbook",
+        "Python Handbook",
+        "AI Handbook",
+    ]
+
+def test_document_pagination(client):
+    headers = register_and_login(client)
+
+    create_test_document(client, headers, "Alpha Notes")
+    create_test_document(client, headers, "Beta Notes")
+    create_test_document(client, headers, "Gamma Notes")
+
+    first_response = client.get(
+        "/documents/",
+        headers=headers,
+        params={
+            "sort_by": "title",
+            "order": "asc",
+            "limit": 2,
+            "offset": 0,
+        },
+    )
+
+    second_response = client.get(
+        "/documents/",
+        headers=headers,
+        params={
+            "sort_by": "title",
+            "order": "asc",
+            "limit": 2,
+            "offset": 2,
+        },
+    )
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+
+    first_titles = [
+        doc["title"] for doc in first_response.json()
+    ]
+    second_titles = [
+        doc["title"] for doc in second_response.json()
+    ]
+
+    assert first_titles == ["Alpha Notes", "Beta Notes"]
+    assert second_titles == ["Gamma Notes"]
+
+def test_document_list_rejects_invalid_query_parameters(client):
+    headers = register_and_login(client)
+
+    invalid_queries = [
+        {"sort_by": "password"},
+        {"order": "sideways"},
+        {"limit": 0},
+        {"limit": 101},
+        {"offset": -1},
+        {"subject_id": 0},
+    ]
+
+    for params in invalid_queries:
+        response = client.get(
+            "/documents/",
+            headers=headers,
+            params=params,
+        )
+        assert response.status_code == 422, (
+            f"Expected 422 for {params}, got "
+            f"{response.status_code}"
+        )
+
+def test_subject_filter_does_not_expose_another_users_documents(client):
+    owner_headers = register_and_login(
+        client, "owner@example.com"
+    )
+    other_headers = register_and_login(
+        client, "other@example.com"
+    )
+
+    subject = create_test_subject(
+        client, owner_headers, "Private Subject"
+    )
+
+    document = create_test_document_for_subject(
+        client,
+        owner_headers,
+        subject["id"],
+        "Private Notes",
+    )
+
+    response = client.get(
+        "/documents/",
+        headers=other_headers,
+        params={"subject_id": subject["id"]},
+    )
+
+    assert response.status_code == 200
+    assert all(
+        doc["id"] != document["id"]
+        for doc in response.json()
+    )
+
+
+def test_login_rejects_incorrect_password(client):
+    register_response = client.post(
+        "/auth/register",
+        json={
+            "email": "student@example.com",
+            "password": "SecurePass123!",
+        },
+    )
+    assert register_response.status_code in (200, 201)
+
+    response = client.post(
+        "/auth/login",
+        json={
+            "email": "student@example.com",
+            "password": "WrongPassword123!",
+        },
+    )
+
+    assert response.status_code == 401
+    assert "access_token" not in response.json()

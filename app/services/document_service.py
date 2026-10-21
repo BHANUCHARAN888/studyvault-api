@@ -216,3 +216,58 @@ def delete_document(
             "Failed to remove document file: %s", file_path
         )
 
+
+def list_documents(
+    db: Session,
+    current_user: User,
+    subject_id: int | None = None,
+    search: str | None = None,
+    sort_by: str = "created_at",
+    order: str = "desc",
+    limit: int = 20,
+    offset: int = 0,
+) -> list[Document]:
+    statement = select(Document).where(
+        Document.owner_id == current_user.id
+    )
+
+    if subject_id is not None:
+        statement = statement.where(
+            Document.subject_id == subject_id
+        )
+
+    if search is not None:
+        search_term = search.strip()
+
+        if not search_term:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Search cannot contain only whitespace",
+            )
+
+        statement = statement.where(
+            Document.title.ilike(f"%{search_term}%")
+        )
+
+    sort_columns = {
+        "created_at": Document.created_at,
+        "title": Document.title,
+        "file_size": Document.file_size,
+    }
+
+    sort_column = sort_columns[sort_by]
+
+    if order == "asc":
+        statement = statement.order_by(
+            sort_column.asc(),
+            Document.id.asc(),
+        )
+    else:
+        statement = statement.order_by(
+            sort_column.desc(),
+            Document.id.asc(),
+        )
+
+    statement = statement.offset(offset).limit(limit)
+
+    return list(db.scalars(statement).all())
