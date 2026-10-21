@@ -237,3 +237,119 @@ def test_invalid_pdf_leaves_no_file_or_record(client):
     upload_dir = document_service.STORAGE_DIR
     assert not upload_dir.exists() or list(upload_dir.iterdir()) == []
 
+
+def create_test_document(client, headers, title="Study Notes"):
+    response = client.post(
+        "/documents/",
+        headers=headers,
+        data={"title": title},
+        files={
+            "file": (
+                "notes.pdf",
+                b"%PDF-1.4\nTest PDF",
+                "application/pdf",
+            )
+        },
+    )
+    assert response.status_code == 201
+    return response.json()
+
+
+def test_update_document_title(client):
+    headers = register_and_login(client)
+    document = create_test_document(client, headers)
+
+    response = client.patch(
+        f"/documents/{document['id']}",
+        headers=headers,
+        json={"title": "Updated Notes"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["title"] == "Updated Notes"
+
+    # Verify the change persists.
+    get_response = client.get(
+        f"/documents/{document['id']}",
+        headers=headers,
+    )
+    assert get_response.status_code == 200
+    assert get_response.json()["title"] == "Updated Notes"
+
+
+def test_update_document_rejects_blank_title(client):
+    headers = register_and_login(client)
+    document = create_test_document(client, headers)
+
+    response = client.patch(
+        f"/documents/{document['id']}",
+        headers=headers,
+        json={"title": "   "},
+    )
+
+    assert response.status_code == 422
+
+
+def test_cannot_update_another_users_document(client):
+    owner_headers = register_and_login(client, "owner@example.com")
+    document = create_test_document(client, owner_headers)
+
+    other_headers = register_and_login(client, "other@example.com")
+
+    response = client.patch(
+        f"/documents/{document['id']}",
+        headers=other_headers,
+        json={"title": "Unauthorized Update"},
+    )
+
+    assert response.status_code == 404
+
+
+def test_delete_document_removes_record_and_file(client):
+    headers = register_and_login(client)
+    document = create_test_document(client, headers)
+    document_id = document["id"]
+
+    # Capture the stored file before deleting the record.
+    upload_dir = document_service.STORAGE_DIR
+    stored_files = list(upload_dir.iterdir())
+    assert len(stored_files) == 1
+    stored_file = stored_files[0]
+    assert stored_file.is_file()
+
+    response = client.delete(
+        f"/documents/{document_id}",
+        headers=headers,
+    )
+
+    assert response.status_code == 204
+    assert response.content == b""
+    assert not stored_file.exists()
+
+    # Verify the database record is gone.
+    get_response = client.get(
+        f"/documents/{document_id}",
+        headers=headers,
+    )
+    assert get_response.status_code == 404
+
+    list_response = client.get(
+        "/documents/",
+        headers=headers,
+    )
+    assert list_response.status_code == 200
+    assert list_response.json() == []
+
+
+def test_repeated_delete_returns_404(client):
+    headers = register_and_login(client)
+    document = create_test_document(client, headers)
+    url = f"/documents/{document['id']}"
+
+    first_response = client.delete(url, headers=headers)
+    assert first_response.status_code == 204
+
+    second_response = client.delete(url, headers=headers)
+    assert second_response.status_code == 404
+
+

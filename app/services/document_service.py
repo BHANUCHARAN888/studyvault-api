@@ -113,3 +113,106 @@ async def create_document(
 
     finally:
         await file.close()
+
+
+def update_document(
+    db: Session,
+    current_user: User,
+    document_id: int,
+    updates: dict,
+) -> Document:
+    document = db.scalar(
+        select(Document).where(
+            Document.id == document_id,
+            Document.owner_id == current_user.id,
+        )
+    )
+
+    if document is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found",
+        )
+
+    if "title" in updates:
+        title = updates["title"].strip()
+
+        if not title:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Title cannot be empty",
+            )
+
+        document.title = title
+
+    if "subject_id" in updates:
+        subject_id = updates["subject_id"]
+
+        if subject_id is not None:
+            subject = db.scalar(
+                select(Subject).where(
+                    Subject.id == subject_id,
+                    Subject.owner_id == current_user.id,
+                )
+            )
+
+            if subject is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Subject not found",
+                )
+
+        document.subject_id = subject_id
+
+    db.commit()
+    db.refresh(document)
+    return document
+
+
+def delete_document(
+    db: Session,
+    current_user: User,
+    document_id: int,
+) -> None:
+    document = db.scalar(
+        select(Document).where(
+            Document.id == document_id,
+            Document.owner_id == current_user.id,
+        )
+    )
+
+    if document is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found",
+        )
+
+    file_path = Path(document.file_path).resolve()
+
+    # Ensure the file is inside StudyVault's document storage.
+    if file_path.parent != STORAGE_DIR:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Invalid document storage path",
+        )
+
+    # Commit the database deletion first.
+    try:
+        db.delete(document)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    # Delete the physical file after the database commit.
+    # If cleanup fails, the database record is already deleted;
+    # log the failure and clean up the orphan file operationally.
+    try:
+        file_path.unlink(missing_ok=True)
+    except OSError:
+        import logging
+
+        logging.getLogger(__name__).exception(
+            "Failed to remove document file: %s", file_path
+        )
+
