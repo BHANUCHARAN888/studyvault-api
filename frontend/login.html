@@ -1,0 +1,55 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StudyVault | Sign In</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <main class="auth-container">
+        <section class="auth-card">
+            <h1>StudyVault</h1>
+            <p class="subtitle">Your personal learning library.</p>
+
+            <div class="auth-tabs">
+                <button id="login-tab" class="active" type="button">
+                    Login
+                </button>
+                <button id="register-tab" type="button">
+                    Register
+                </button>
+            </div>
+
+            <form id="auth-form">
+                <label for="email">Email</label>
+                <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    autocomplete="email"
+                    required
+                >
+
+                <label for="password">Password</label>
+                <input
+                    id="password"
+                    name="password"
+                    type="password"
+                    autocomplete="current-password"
+                    minlength="8"
+                    maxlength="128"
+                    required
+                >
+
+                <button id="submit-button" type="submit">Login</button>
+                <p id="auth-message" role="status" aria-live="polite"></p>
+            </form>
+        </section>
+    </main>
+
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+</body>
+</html>

@@ -1,0 +1,108 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StudyVault | My Library</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="dashboard-header">
+        <a class="brand" href="index.html">StudyVault</a>
+
+        <div class="user-actions">
+            <span id="user-email"></span>
+            <button id="logout-button" type="button">Logout</button>
+        </div>
+    </header>
+
+    <main class="dashboard">
+        <section class="welcome-section">
+            <div>
+                <h1>My Learning Library</h1>
+                <p>Keep your study materials organized in one place.</p>
+            </div>
+
+            <button id="show-upload-button" type="button">
+                + Upload PDF
+            </button>
+        </section>
+
+        <section id="upload-panel" class="panel" hidden>
+            <h2>Upload a document</h2>
+
+            <form id="upload-form">
+                <label for="document-title">Document title</label>
+                <input
+                    id="document-title"
+                    name="title"
+                    type="text"
+                    maxlength="255"
+                    required
+                >
+
+                <label for="document-file">PDF file</label>
+                <input
+                    id="document-file"
+                    name="file"
+                    type="file"
+                    accept="application/pdf,.pdf"
+                    required
+                >
+
+                <label for="document-subject">Subject</label>
+                <select id="document-subject" name="subject_id">
+                    <option value="">No subject</option>
+                </select>
+
+                <div class="form-actions">
+                    <button type="submit">Upload</button>
+                    <button id="cancel-upload-button" type="button">
+                        Cancel
+                    </button>
+                </div>
+
+                <p id="upload-message" role="status"></p>
+            </form>
+        </section>
+
+        <section class="library-section">
+            <div class="library-toolbar">
+                <input
+                    id="search-input"
+                    type="search"
+                    placeholder="Search documents..."
+                    aria-label="Search documents"
+                >
+
+                <select id="subject-filter" aria-label="Filter by subject">
+                    <option value="">All subjects</option>
+                </select>
+
+                <select id="sort-select" aria-label="Sort documents">
+                    <option value="created_at:desc">Newest first</option>
+                    <option value="created_at:asc">Oldest first</option>
+                    <option value="title:asc">Title A–Z</option>
+                    <option value="title:desc">Title Z–A</option>
+                    <option value="file_size:desc">Largest first</option>
+                    <option value="file_size:asc">Smallest first</option>
+                </select>
+            </div>
+
+            <p id="library-message" role="status"></p>
+
+            <div id="document-list" class="document-grid"></div>
+
+            <div class="pagination">
+                <button id="previous-page" type="button">Previous</button>
+                <span id="page-label">Page 1</span>
+                <button id="next-page" type="button">Next</button>
+            </div>
+        </section>
+    </main>
+
+    <script src="js/api.js"></script>
+    <script src="js/documents.js"></script>
+</body>
+</html>

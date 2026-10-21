@@ -1,3 +1,4 @@
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI
 from sqlalchemy import text
 
@@ -10,6 +11,17 @@ from app.routers.subjects import router as subjects_router
 
 def create_app(create_tables: bool = False) -> FastAPI:
     app = FastAPI(title="StudyVault API")
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://127.0.0.1:5500",
+            "http://localhost:5500",
+        ],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     if create_tables:
         Base.metadata.create_all(bind=engine)
