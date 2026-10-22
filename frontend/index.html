@@ -67,6 +67,42 @@
             </form>
         </section>
 
+
+        <section class="subjects-section">
+            <div class="section-heading">
+                <div>
+                    <h2>My Subjects</h2>
+                    <p>Organize your learning materials by subject.</p>
+                </div>
+                <button id="show-subject-form-button" type="button">
+                    + Create Subject
+                </button>
+            </div>
+
+            <form id="subject-form" class="panel" hidden>
+                <label for="subject-name">Subject name</label>
+                <input
+                    id="subject-name"
+                    name="name"
+                    type="text"
+                    maxlength="100"
+                    placeholder="e.g. Python, Machine Learning"
+                    required
+                >
+                <div class="form-actions">
+                    <button type="submit">Create Subject</button>
+                    <button id="cancel-subject-button" type="button">
+                        Cancel
+                    </button>
+                </div>
+                <p id="subject-message" role="status"></p>
+            </form>
+
+            <div id="subject-list" class="subject-grid"></div>
+            <p id="subjects-status" role="status"></p>
+        </section>
+
+
         <section class="library-section">
             <div class="library-toolbar">
                 <input

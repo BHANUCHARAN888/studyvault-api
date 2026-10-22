@@ -409,3 +409,108 @@ button {
 .document-actions .delete-button:hover {
     background: #ffe4e6;
 }
+
+
+/* Subject management */
+.subjects-section {
+    margin: 2rem 0;
+}
+
+.section-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.section-heading h2 {
+    margin-bottom: 0.35rem;
+}
+
+.section-heading p {
+    margin-top: 0;
+    color: #64748b;
+}
+
+.subject-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+
+.subject-card {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: space-between;
+    gap: 0.75rem;
+    min-height: 100px;
+    padding: 1rem;
+    border: 1px solid #dbe3ef;
+    border-radius: 12px;
+    background: #ffffff;
+}
+
+.subject-name-button {
+    border: none;
+    background: transparent;
+    color: #1e293b;
+    font-size: 1rem;
+    font-weight: 600;
+    text-align: left;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+}
+
+.subject-name-button:hover {
+    color: #4f46e5;
+}
+
+.subject-name-button:focus-visible,
+.delete-subject-button:focus-visible {
+    outline: 3px solid #a5b4fc;
+    outline-offset: 2px;
+}
+
+.delete-subject-button {
+    align-self: flex-start;
+    padding: 0.4rem 0.7rem;
+    border: 1px solid #fecaca;
+    border-radius: 6px;
+    background: #fff1f2;
+    color: #b91c1c;
+    cursor: pointer;
+}
+
+.delete-subject-button:hover {
+    background: #ffe4e6;
+}
+
+.delete-subject-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+
+#subject-form {
+    margin-bottom: 1rem;
+}
+
+#subjects-status,
+#subject-message {
+    color: #64748b;
+}
+
+@media (max-width: 600px) {
+    .section-heading {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .subject-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.auth import get_current_user
 from app.db.dependencies import get_db
 from app.models import User
-from app.services.subject_service import create_subject, list_subjects
+from app.services.subject_service import create_subject, list_subjects, delete_subject
 
 router = APIRouter(prefix="/subjects", tags=["Subjects"])
 
@@ -40,5 +40,21 @@ def list_subjects_endpoint(
 ):
     return list_subjects(
         db=db,
+        current_user=current_user,
+    )
+
+
+@router.delete(
+    "/{subject_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_subject_endpoint(
+    subject_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    delete_subject(
+        db=db,
+        subject_id=subject_id,
         current_user=current_user,
     )

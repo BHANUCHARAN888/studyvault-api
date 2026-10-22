@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Email | StudyVault</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <main class="auth-container">
+        <section class="auth-card">
+            <h1>StudyVault</h1>
+            <h2>Email verification</h2>
+            <p id="verification-message" role="status" aria-live="polite">
+                Verifying your email...
+            </p>
+            <a href="http://127.0.0.1:5500/login.html">Go to login</a>
+        </section>
+    </main>
+
+    <script src="js/api.js"></script>
+    <script>
+        const message = document.getElementById("verification-message");
+        const params = new URLSearchParams(window.location.search);
+        const token = params.get("token");
+
+        async function verifyEmail() {
+            if (!token) {
+                message.textContent =
+                    "The verification link is missing its token.";
+                return;
+            }
+
+            try {
+                const result = await apiRequest(
+                    `/auth/verify-email?token=${encodeURIComponent(token)}`
+                );
+
+                message.textContent = result.message;
+            } catch (error) {
+                message.textContent =
+                    "Verification failed. The link may be invalid or expired.";
+            } finally {
+                // Remove the sensitive token from the visible URL.
+                window.history.replaceState(
+                    {},
+                    document.title,
+                    window.location.pathname
+                );
+            }
+        }
+
+        verifyEmail();
+    </script>
+</body>
+</html>

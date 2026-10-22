@@ -32,63 +32,112 @@ function formatFileSize(bytes) {
 }
 
 
+
 function createDocumentCard(document) {
-    const card = documentList.ownerDocument.createElement("article");
+    const doc = documentList.ownerDocument;
+    const card = doc.createElement("article");
     card.className = "document-card";
 
-    const title = documentList.ownerDocument.createElement("h3");
+    const title = doc.createElement("h3");
     title.textContent = document.title;
 
-    const details = documentList.ownerDocument.createElement("p");
+    const details = doc.createElement("p");
     details.textContent =
         `${formatFileSize(document.file_size)} · ` +
         new Date(document.created_at).toLocaleDateString();
 
-    const subject = documentList.ownerDocument.createElement("p");
+    const subject = doc.createElement("p");
     subject.className = "document-subject";
-    subject.textContent = document.subject_id
-        ? `Subject ID: ${document.subject_id}`
-        : "No subject";
+    subject.textContent = document.subject_name || "No subject";
 
-    const actions = documentList.ownerDocument.createElement("div");
+    const actions = doc.createElement("div");
     actions.className = "document-actions";
 
-    const renameButton = documentList.ownerDocument.createElement("button");
-    renameButton.type = "button";
-    renameButton.textContent = "Rename";
+    // Edit title and subject
+    const editButton = doc.createElement("button");
+    editButton.type = "button";
+    editButton.textContent = "Edit";
 
-    renameButton.addEventListener("click", async () => {
-        const newTitle = window.prompt("Enter the new document title:", document.title);
-
-        if (newTitle === null) return;
-
-        const trimmedTitle = newTitle.trim();
-
-        if (!trimmedTitle || trimmedTitle.length > 255) {
-            window.alert("Title must contain 1–255 characters.");
-            return;
-        }
-
-        renameButton.disabled = true;
-
+    editButton.addEventListener("click", async () => {
         try {
+            const subjects = await apiRequest("/subjects/");
+
+            const newTitle = window.prompt(
+                "Document title:",
+                document.title
+            );
+
+            if (newTitle === null) return;
+
+            const trimmedTitle = newTitle.trim();
+
+            if (!trimmedTitle || trimmedTitle.length > 255) {
+                window.alert("Title must contain 1–255 characters.");
+                return;
+            }
+
+            const currentSubject = document.subject_id == null
+                ? ""
+                : String(document.subject_id);
+
+            const choices = [
+                "0. No subject",
+                ...subjects.map(
+                    (item, index) => `${index + 1}. ${item.name}`
+                ),
+            ].join("\n");
+
+            const subjectChoice = window.prompt(
+                `Choose a subject by number:\n${choices}\n\nEnter 0 for no subject.`,
+                currentSubject === ""
+                    ? "0"
+                    : String(
+                        subjects.findIndex(
+                            item => item.id === document.subject_id
+                        ) + 1
+                    )
+            );
+
+            if (subjectChoice === null) return;
+
+            const choice = Number(subjectChoice);
+
+            if (
+                !Number.isInteger(choice) ||
+                choice < 0 ||
+                choice > subjects.length
+            ) {
+                window.alert("Please enter a valid subject number.");
+                return;
+            }
+
+            const selectedSubjectId = choice === 0
+                ? null
+                : subjects[choice - 1].id;
+
+            editButton.disabled = true;
+
             await apiRequest(`/documents/${document.id}`, {
                 method: "PATCH",
                 headers: {
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify({ title: trimmedTitle }),
+                body: JSON.stringify({
+                    title: trimmedTitle,
+                    subject_id: selectedSubjectId,
+                }),
             });
 
             await loadDocuments();
         } catch (error) {
             window.alert(error.message);
         } finally {
-            renameButton.disabled = false;
+            editButton.disabled = false;
         }
     });
 
-    const deleteButton = documentList.ownerDocument.createElement("button");
+    // Delete document
+    const deleteButton = doc.createElement("button");
     deleteButton.type = "button";
     deleteButton.textContent = "Delete";
     deleteButton.className = "delete-button";
@@ -114,11 +163,12 @@ function createDocumentCard(document) {
         }
     });
 
-    actions.append(renameButton, deleteButton);
+    actions.append(editButton, deleteButton);
     card.append(title, details, subject, actions);
 
     return card;
 }
+
 
 
 async function loadCurrentUser() {
@@ -132,22 +182,98 @@ async function loadCurrentUser() {
     }
 }
 
+
 async function loadSubjects() {
     const subjects = await apiRequest("/subjects/");
 
+    const subjectList = document.getElementById("subject-list");
+    const subjectsStatus = document.getElementById("subjects-status");
+    const uploadSubject = document.getElementById("document-subject");
+
+    // Reset dropdowns to prevent duplicate options.
+    subjectFilter.replaceChildren(
+        new Option("All subjects", "")
+    );
+
+    uploadSubject.replaceChildren(
+        new Option("No subject", "")
+    );
+
+    // Render subject cards and populate both dropdowns.
+    subjectList.replaceChildren();
+
+    if (subjects.length === 0) {
+        subjectsStatus.textContent =
+            "No subjects yet. Create one to organize your documents.";
+        return;
+    }
+
+    subjectsStatus.textContent = "";
+
     for (const subject of subjects) {
-        const filterOption = document.createElement("option");
-        filterOption.value = subject.id;
-        filterOption.textContent = subject.name;
-        subjectFilter.appendChild(filterOption);
+        subjectFilter.add(
+            new Option(subject.name, String(subject.id))
+        );
 
-        const uploadOption = document.createElement("option");
-        uploadOption.value = subject.id;
-        uploadOption.textContent = subject.name;
+        uploadSubject.add(
+            new Option(subject.name, String(subject.id))
+        );
 
-        document.getElementById("document-subject").appendChild(uploadOption);
+
+const card = document.createElement("div");
+card.className = "subject-card";
+const subjectButton = document.createElement("button");
+subjectButton.type = "button";
+subjectButton.className = "subject-name-button";
+subjectButton.textContent = subject.name;
+subjectButton.setAttribute(
+    "aria-label",
+    `Show documents in ${subject.name}`
+);
+
+subjectButton.addEventListener("click", () => {
+    subjectFilter.value = String(subject.id);
+    currentPage = 0;
+    loadDocuments();
+});
+
+const deleteSubjectButton = document.createElement("button");
+deleteSubjectButton.type = "button";
+deleteSubjectButton.className = "delete-subject-button";
+deleteSubjectButton.textContent = "Delete";
+deleteSubjectButton.addEventListener("click", async () => {
+    const confirmed = window.confirm(
+        `Delete subject "${subject.name}"? Its documents will be kept without a subject.`
+    );
+
+    if (!confirmed) return;
+
+    deleteSubjectButton.disabled = true;
+
+    try {
+        await apiRequest(`/subjects/${subject.id}`, {
+            method: "DELETE",
+        });
+
+        if (subjectFilter.value === String(subject.id)) {
+            subjectFilter.value = "";
+        }
+
+        currentPage = 0;
+        await loadSubjects();
+        await loadDocuments();
+    } catch (error) {
+        window.alert(error.message);
+        deleteSubjectButton.disabled = false;
+    }
+});
+
+card.append(subjectButton, deleteSubjectButton);
+subjectList.appendChild(card);
+
     }
 }
+
 
 async function loadDocuments() {
     libraryMessage.textContent = "Loading documents...";
@@ -305,5 +431,63 @@ uploadForm.addEventListener("submit", async (event) => {
         uploadMessage.textContent = error.message;
     } finally {
         uploadButton.disabled = false;
+    }
+});
+
+
+const showSubjectFormButton = document.getElementById(
+    "show-subject-form-button"
+);
+const subjectForm = document.getElementById("subject-form");
+const cancelSubjectButton = document.getElementById(
+    "cancel-subject-button"
+);
+const subjectNameInput = document.getElementById("subject-name");
+const subjectMessage = document.getElementById("subject-message");
+
+showSubjectFormButton.addEventListener("click", () => {
+    subjectForm.hidden = false;
+    subjectMessage.textContent = "";
+    subjectNameInput.focus();
+});
+
+cancelSubjectButton.addEventListener("click", () => {
+    subjectForm.reset();
+    subjectForm.hidden = true;
+    subjectMessage.textContent = "";
+});
+
+subjectForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const name = subjectNameInput.value.trim();
+
+    if (!name) {
+        subjectMessage.textContent = "Enter a subject name.";
+        return;
+    }
+
+    const submitButton = subjectForm.querySelector(
+        'button[type="submit"]'
+    );
+
+    submitButton.disabled = true;
+    subjectMessage.textContent = "Creating subject...";
+
+    try {
+        await apiRequest(
+            `/subjects/?name=${encodeURIComponent(name)}`,
+            { method: "POST" }
+        );
+
+        subjectMessage.textContent = "Subject created successfully.";
+        subjectForm.reset();
+
+        await loadSubjects();
+        subjectForm.hidden = true;
+    } catch (error) {
+        subjectMessage.textContent = error.message;
+    } finally {
+        submitButton.disabled = false;
     }
 });

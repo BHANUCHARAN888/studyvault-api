@@ -52,10 +52,13 @@ authForm.addEventListener("submit", async (event) => {
             });
 
             authMessage.textContent =
-                "Account created. You can now log in.";
+    "Registration successful! Check your inbox for the verification link before logging in.";
 
-            setAuthMode("login");
-            return;
+authForm.reset();
+setAuthMode("login");
+authMessage.textContent =
+    "Registration successful! Check your inbox for the verification link before logging in.";
+return;
         }
 
         const result = await apiRequest("/auth/login", {

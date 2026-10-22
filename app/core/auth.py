@@ -25,10 +25,11 @@ def get_current_user(
 
     try:
         payload = jwt.decode(
-            token,
-            settings.jwt_secret_key,
-            algorithms=["HS256"],
-        )
+        token,
+        settings.jwt_secret_key,
+        algorithms=["HS256"],
+        options={"require": ["exp", "sub"]},
+)
         subject = payload.get("sub")
 
         if not isinstance(subject, str) or not subject.isdigit():

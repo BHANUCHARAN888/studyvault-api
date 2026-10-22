@@ -1,3 +1,4 @@
+import jwt
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -8,6 +9,15 @@ from main import app
 from app.db.database import Base
 from app.db.dependencies import get_db
 from app.services import document_service
+from app.services import auth_service
+
+from datetime import datetime, timedelta, timezone
+
+from app.models import User
+from app.core.security import hash_verification_token
+from app.core.config import settings
+
+TEST_VERIFICATION_TOKENS = {}
 
 
 @pytest.fixture
@@ -24,6 +34,7 @@ def client(tmp_path, monkeypatch):
         autoflush=False,
         autocommit=False,
     )
+    app.state.TestingSessionLocal = TestingSessionLocal
 
     Base.metadata.create_all(bind=test_engine)
 
@@ -46,6 +57,25 @@ def client(tmp_path, monkeypatch):
     # Use a small limit to test oversized uploads cheaply.
     monkeypatch.setattr(document_service, "MAX_FILE_SIZE", 64)
 
+    TEST_VERIFICATION_TOKENS.clear()
+
+    def mock_send_verification_email(email, token):
+        TEST_VERIFICATION_TOKENS[email] = token
+
+    monkeypatch.setattr(
+        auth_service,
+        "send_verification_email",
+        mock_send_verification_email,
+    )
+
+    assert (
+        auth_service.send_verification_email
+        is mock_send_verification_email
+    )
+
+
+
+
     with TestClient(app) as test_client:
         yield test_client
 
@@ -61,7 +91,15 @@ def register_and_login(client, email="student@example.com"):
             "password": "SecurePass123!",
         },
     )
-    assert register_response.status_code in (200, 201)
+    assert register_response.status_code == 201
+
+    verification_token = TEST_VERIFICATION_TOKENS[email]
+
+    verify_response = client.get(
+        "/auth/verify-email",
+        params={"token": verification_token},
+    )
+    assert verify_response.status_code == 200
 
     login_response = client.post(
         "/auth/login",
@@ -72,8 +110,8 @@ def register_and_login(client, email="student@example.com"):
     )
     assert login_response.status_code == 200
 
-    token = login_response.json()["access_token"]
-    return {"Authorization": f"Bearer {token}"}
+    access_token = login_response.json()["access_token"]
+    return {"Authorization": f"Bearer {access_token}"}
 
 
 def test_health_endpoint(client):
@@ -122,6 +160,68 @@ def test_user_cannot_access_another_users_document(client):
 
     assert response.status_code == 404
 
+
+def test_user_cannot_update_another_users_document(client):
+    owner_headers = register_and_login(client, "owner2@example.com")
+
+    upload_response = client.post(
+        "/documents/",
+        headers=owner_headers,
+        data={"title": "Private Notes"},
+        files={
+            "file": (
+                "notes.pdf",
+                b"%PDF-1.4\nTest PDF",
+                "application/pdf",
+            )
+        },
+    )
+    assert upload_response.status_code == 201
+    document_id = upload_response.json()["id"]
+
+    other_headers = register_and_login(client, "other2@example.com")
+
+    response = client.patch(
+    f"/documents/{document_id}",
+    headers=other_headers,
+    json={"title": "Hacked Title"},
+)
+
+    assert response.status_code == 404
+
+def test_user_cannot_delete_another_users_document(client):
+    owner_headers = register_and_login(client, "delete_owner@example.com")
+
+    upload_response = client.post(
+        "/documents/",
+        headers=owner_headers,
+        data={"title": "Private Notes"},
+        files={
+            "file": (
+                "notes.pdf",
+                b"%PDF-1.4\nTest PDF",
+                "application/pdf",
+            )
+        },
+    )
+    assert upload_response.status_code == 201
+    document_id = upload_response.json()["id"]
+
+    other_headers = register_and_login(client, "delete_other@example.com")
+
+    response = client.delete(
+        f"/documents/{document_id}",
+        headers=other_headers,
+    )
+
+    assert response.status_code == 404
+
+    # Confirm the original owner can still access the document.
+    owner_response = client.get(
+        f"/documents/{document_id}",
+        headers=owner_headers,
+    )
+    assert owner_response.status_code == 200
 
 def test_rejects_non_pdf_upload(client):
     headers = register_and_login(client)
@@ -606,3 +706,156 @@ def test_login_rejects_incorrect_password(client):
 
     assert response.status_code == 401
     assert "access_token" not in response.json()
+
+
+def test_unverified_user_cannot_login(client):
+    response = client.post(
+        "/auth/register",
+        json={
+            "email": "unverified@example.com",
+            "password": "SecurePass123!",
+        },
+    )
+
+    assert response.status_code == 201
+
+    login_response = client.post(
+        "/auth/login",
+        json={
+            "email": "unverified@example.com",
+            "password": "SecurePass123!",
+        },
+    )
+
+    assert login_response.status_code == 401
+    assert "not verified" in login_response.json()["detail"].lower()
+
+
+def test_email_verification_succeeds(client):
+    email = "verify@example.com"
+
+    register_response = client.post(
+        "/auth/register",
+        json={
+            "email": email,
+            "password": "SecurePass123!",
+        },
+    )
+
+    assert register_response.status_code == 201
+
+    token = TEST_VERIFICATION_TOKENS[email]
+
+    verify_response = client.get(
+        "/auth/verify-email",
+        params={"token": token},
+    )
+
+    assert verify_response.status_code == 200
+    assert "verified successfully" in (
+        verify_response.json()["message"].lower()
+    )
+
+    login_response = client.post(
+        "/auth/login",
+        json={
+            "email": email,
+            "password": "SecurePass123!",
+        },
+    )
+
+    assert login_response.status_code == 200
+
+
+def test_invalid_verification_token_is_rejected(client):
+    response = client.get(
+        "/auth/verify-email",
+        params={"token": "invalid-token"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == (
+        "Verification link is invalid or expired."
+    )
+
+
+def test_expired_verification_token_is_rejected(client):
+    email = "expired@example.com"
+
+    register_response = client.post(
+        "/auth/register",
+        json={
+            "email": email,
+            "password": "SecurePass123!",
+        },
+    )
+    assert register_response.status_code == 201
+
+    token = TEST_VERIFICATION_TOKENS[email]
+
+    TestingSessionLocal = client.app.state.TestingSessionLocal
+    with TestingSessionLocal() as db:
+        user = db.query(User).filter(User.email == email).first()
+        assert user is not None
+
+        user.verification_token_expires_at = (
+            datetime.now(timezone.utc) - timedelta(minutes=1)
+        )
+        db.commit()
+
+    response = client.get(
+        "/auth/verify-email",
+        params={"token": token},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == (
+        "Verification link is invalid or expired."
+    )
+
+
+def test_token_without_expiry_is_rejected(client):
+    headers = register_and_login(client)
+
+    token_without_expiry = jwt.encode(
+        {"sub": "1"},
+        settings.jwt_secret_key,
+        algorithm="HS256",
+    )
+
+    response = client.get(
+        "/documents/",
+        headers={
+            "Authorization": f"Bearer {token_without_expiry}"
+        },
+    )
+
+    assert response.status_code == 401
+
+def test_expired_access_token_is_rejected(client):
+    register_and_login(client)
+
+    expired_token = jwt.encode(
+        {
+            "sub": "1",
+            "exp": datetime.now(timezone.utc) - timedelta(minutes=1),
+        },
+        settings.jwt_secret_key,
+        algorithm="HS256",
+    )
+
+    response = client.get(
+        "/documents/",
+        headers={"Authorization": f"Bearer {expired_token}"},
+    )
+
+    assert response.status_code == 401
+
+
+def test_malformed_access_token_is_rejected(client):
+    response = client.get(
+        "/documents/",
+        headers={"Authorization": "Bearer not-a-valid-jwt"},
+    )
+
+    assert response.status_code == 401

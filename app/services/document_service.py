@@ -1,10 +1,9 @@
-
 from pathlib import Path
 from uuid import uuid4
 
 from fastapi import HTTPException, UploadFile, status
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models import Document, Subject, User
 
@@ -227,9 +226,11 @@ def list_documents(
     limit: int = 20,
     offset: int = 0,
 ) -> list[Document]:
-    statement = select(Document).where(
-        Document.owner_id == current_user.id
-    )
+    statement = (
+    select(Document)
+    .options(selectinload(Document.subject))
+    .where(Document.owner_id == current_user.id)
+)
 
     if subject_id is not None:
         statement = statement.where(

@@ -1,3 +1,6 @@
+
+import hashlib
+import secrets
 from datetime import datetime, timedelta, timezone
 
 import jwt
@@ -31,4 +34,19 @@ def create_access_token(user_id: int) -> str:
         payload,
         settings.jwt_secret_key,
         algorithm=ALGORITHM,
+    )
+
+
+def create_verification_token() -> str:
+    return secrets.token_urlsafe(32)
+
+
+def hash_verification_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+
+def verification_token_expiry() -> datetime:
+    return datetime.now(timezone.utc) + timedelta(
+        minutes=settings.verification_token_expire_minutes
     )
